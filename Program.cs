@@ -120,6 +120,122 @@ app.MapPost("/servicetickets/{id}/complete", (int id) =>
     ticketToComplete.DateCompleted = DateTime.Today.ToString();
 });
 
+app.MapGet("/incompleteEmergencyServiceTickets", () =>
+{
+    List<ServiceTicket> incompleteEmergencyTickets = serviceTickets
+    .Where(st => !st.Emergency && string.IsNullOrEmpty(st.DateCompleted)).ToList();
+
+    return Results.Ok(incompleteEmergencyTickets);
+});
+
+app.MapGet("/unassignedServiceTickets", () =>
+{
+    List<ServiceTicket> unassignedServiceTickets = serviceTickets
+    .Where(st => st.EmployeeId == null).ToList();
+
+    return Results.Ok(unassignedServiceTickets);
+});
+
+app.MapGet("/noClosedServiceTicketForAYear", () =>
+{
+    DateTime currentDate = DateTime.Now;
+    int oneYearAgo = currentDate.Year - 1; //Get last year this time
+
+    List<Customer> customersWithoutClosedServiceTicketForYear = customers
+        .Where(c =>
+        {
+            List<ServiceTicket> customerServiceTickets = serviceTickets
+                .Where(st => st.CustomerId == c.Id && !string.IsNullOrEmpty(st.DateCompleted))
+                .ToList();
+
+            if (customerServiceTickets.Count == 0)
+                return true;
+
+            DateTime lastClosedDate = customerServiceTickets.Max(st => DateTime.Parse(st.DateCompleted));
+            int yearsSinceLastClosed = currentDate.Year - lastClosedDate.Year; //determined how many days the ticket is open
+
+            return yearsSinceLastClosed > 1; //Give me all tickets that meet the criteria
+        })
+        .ToList();
+
+    return Results.Ok(customersWithoutClosedServiceTicketForYear);
+});
+
+app.MapGet("/openEmployees", () =>
+{
+    List<Employee> openEmployees = employees
+    .Where(e => !serviceTickets.Any(st => st.EmployeeId == e.Id
+    && string.IsNullOrEmpty(st.DateCompleted))).ToList();
+
+    return Results.Ok(openEmployees);
+});
+
+app.MapGet("/employeesForCustomers/{employeeId}",(int employeeId) =>
+{
+    List<int> employeesAssginedToCustomers = serviceTickets
+    .Where(st => st.EmployeeId == employeeId)
+    .Select(c => c.CustomerId).Distinct().ToList();
+
+    List<Customer> employeesForCustomers = customers
+    .Where(c => employeesAssginedToCustomers.Contains(c.Id)).ToList();
+
+    return Results.Ok(employeesForCustomers);
+});
+
+app.MapGet("/customersForEmployee/{employeeId}", (int employeeId) =>
+{
+    Employee employee = employees.FirstOrDefault(e => e.Id == employeeId);
+
+    if (employee == null)
+    {
+        return Results.NotFound();
+    }
+
+    List<int> customerIdsForEmployee = employee.ServiceTickets
+        .Where(st => st.EmployeeId == employeeId)
+        .Select(st => st.CustomerId)
+        .Distinct()
+        .ToList();
+
+    List<Customer> customersForEmployee = customers
+        .Where(c => customerIdsForEmployee.Contains(c.Id))
+        .ToList();
+
+    return Results.Ok(customersForEmployee);
+});
+
+app.MapGet("/mostCompletedLastMonth", () =>
+{
+    //Get date for previous month
+    DateTime lastMonth = DateTime.Now.AddMonths(-1);
+
+    var empMostCompletedPrevMonth = serviceTickets
+    .Where(st => !string.IsNullOrEmpty(st.DateCompleted)
+    && DateTime.Parse(st.DateCompleted) >= lastMonth)
+    .GroupBy(st => st.EmployeeId).Select(group => new
+    {
+        EmployeeId = group.Key,
+        ticketCount = group.Count()
+    }).OrderByDescending(x => x.ticketCount).FirstOrDefault();
+
+    if (empMostCompletedPrevMonth == null)
+    {
+        return Results.NotFound();
+    }
+    Employee employee = employees.FirstOrDefault(e => e.Id
+    == empMostCompletedPrevMonth.EmployeeId);
+
+    return Results.Ok(employee);
+});
+
+app.MapGet("/completedTicketsDecending", () =>
+{
+    List<ServiceTicket> completedTickets = serviceTickets
+    .Where(st => !string.IsNullOrEmpty(st.DateCompleted)).ToList();
+
+    return Results.Ok(completedTickets);
+});
+
 app.Run();
 
 
