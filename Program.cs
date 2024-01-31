@@ -231,9 +231,22 @@ app.MapGet("/mostCompletedLastMonth", () =>
 app.MapGet("/completedTicketsDecending", () =>
 {
     List<ServiceTicket> completedTickets = serviceTickets
-    .Where(st => !string.IsNullOrEmpty(st.DateCompleted)).ToList();
+    .Where(st => !string.IsNullOrEmpty(st.DateCompleted))
+    .OrderBy(st => DateTime.Parse(st.DateCompleted)).ToList();
 
     return Results.Ok(completedTickets);
+});
+
+app.MapGet("/incompleteTicketsOrdered", () =>
+{
+    List<ServiceTicket> incompleteTickets = serviceTickets
+    .Where(st => string.IsNullOrEmpty(st.DateCompleted))
+    //Order by emergency status (non-emergency first)
+    .OrderBy(st => st.Emergency)
+    // Then by assignment status (unassigned first)
+    .ThenBy(st => st.EmployeeId == null).ToList();
+
+    return Results.Ok(incompleteTickets);
 });
 
 app.Run();
